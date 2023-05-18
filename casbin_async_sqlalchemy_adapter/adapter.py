@@ -71,16 +71,7 @@ class Adapter(persist.Adapter):
         if db_class is None:
             db_class = CasbinRule
         else:
-            for attr in (
-                    "id",
-                    "ptype",
-                    "v0",
-                    "v1",
-                    "v2",
-                    "v3",
-                    "v4",
-                    "v5",
-            ):  # id attr was used by filter
+            for attr in ("id", "ptype", "v0", "v1", "v2", "v3", "v4", "v5"):  # id attr was used by filter
                 if not hasattr(db_class, attr):
                     raise Exception(f"{attr} not found in custom DatabaseClass.")
             Base.metadata = db_class.metadata
@@ -206,9 +197,7 @@ class Adapter(persist.Adapter):
 
         return True if r > 0 else False
 
-    async def update_policy(
-            self, sec: str, ptype: str, old_rule: [str], new_rule: [str]
-    ) -> None:
+    async def update_policy(self, sec: str, ptype: str, old_rule: [str], new_rule: [str]) -> None:
         """
         Update the old_rule with the new_rule in the database (storage).
 
@@ -239,17 +228,7 @@ class Adapter(persist.Adapter):
                 else:
                     setattr(old_rule_line, "v{}".format(index), None)
 
-    async def update_policies(
-            self,
-            sec: str,
-            ptype: str,
-            old_rules: [
-                [str],
-            ],
-            new_rules: [
-                [str],
-            ],
-    ) -> None:
+    async def update_policies(self, sec: str, ptype: str, old_rules: [[str], ], new_rules: [[str], ]) -> None:
         """
         Update the old_rules with the new_rules in the database (storage).
 
@@ -263,9 +242,7 @@ class Adapter(persist.Adapter):
         for i in range(len(old_rules)):
             await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
 
-    async def update_filtered_policies(
-            self, sec, ptype, new_rules: [[str]], field_index, *field_values
-    ) -> [[str]]:
+    async def update_filtered_policies(self, sec, ptype, new_rules: [[str]], field_index, *field_values) -> [[str]]:
         """update_filtered_policies updates all the policies on the basis of the filter."""
 
         filter = Filter()
