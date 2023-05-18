@@ -1,3 +1,17 @@
+# Copyright 2023 The casbin Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from contextlib import asynccontextmanager
 
 from casbin import persist
@@ -9,6 +23,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import sessionmaker
 
 Base = declarative_base()
+
 
 class CasbinRule(Base):
     __tablename__ = "casbin_rule"
@@ -43,6 +58,7 @@ class Filter:
     v4 = []
     v5 = []
 
+
 class Adapter(persist.Adapter):
     """the interface for Casbin adapters."""
 
@@ -56,14 +72,14 @@ class Adapter(persist.Adapter):
             db_class = CasbinRule
         else:
             for attr in (
-                "id",
-                "ptype",
-                "v0",
-                "v1",
-                "v2",
-                "v3",
-                "v4",
-                "v5",
+                    "id",
+                    "ptype",
+                    "v0",
+                    "v1",
+                    "v2",
+                    "v3",
+                    "v4",
+                    "v5",
             ):  # id attr was used by filter
                 if not hasattr(db_class, attr):
                     raise Exception(f"{attr} not found in custom DatabaseClass.")
@@ -224,15 +240,15 @@ class Adapter(persist.Adapter):
                     setattr(old_rule_line, "v{}".format(index), None)
 
     async def update_policies(
-        self,
-        sec: str,
-        ptype: str,
-        old_rules: [
-            [str],
-        ],
-        new_rules: [
-            [str],
-        ],
+            self,
+            sec: str,
+            ptype: str,
+            old_rules: [
+                [str],
+            ],
+            new_rules: [
+                [str],
+            ],
     ) -> None:
         """
         Update the old_rules with the new_rules in the database (storage).
@@ -246,7 +262,6 @@ class Adapter(persist.Adapter):
         """
         for i in range(len(old_rules)):
             await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
-
 
     async def update_filtered_policies(
             self, sec, ptype, new_rules: [[str]], field_index, *field_values
@@ -269,7 +284,6 @@ class Adapter(persist.Adapter):
         """_update_filtered_policies updates all the policies on the basis of the filter."""
 
         async with self._session_scope() as session:
-
             # Load old policies
 
             query = session.query(self._db_class).filter(
