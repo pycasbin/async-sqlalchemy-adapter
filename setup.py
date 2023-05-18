@@ -22,7 +22,7 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/pycasbin/async-sqlalchemy-adapter",
     keywords=[
-        "casbin",
+        "asynccasbin",
         "SQLAlchemy",
         "casbin-adapter",
         "rbac",
