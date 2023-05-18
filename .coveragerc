@@ -1,0 +1,2 @@
+[run]
+include = casbin_async_sqlalchemy_adapter/*

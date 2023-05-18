@@ -43,7 +43,7 @@ class Filter:
     v4 = []
     v5 = []
 
-class Adapter(persist.Adapter, persist.adapters.UpdateAdapter):
+class Adapter(persist.Adapter):
     """the interface for Casbin adapters."""
 
     def __init__(self, engine, db_class=None, filtered=False):
