@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import warnings
 from contextlib import asynccontextmanager
 
 from casbin import persist
 from sqlalchemy import Column, Integer, String
-from sqlalchemy import create_engine, or_
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.future import select
@@ -62,7 +62,7 @@ class Filter:
 class Adapter(persist.Adapter):
     """the interface for Casbin adapters."""
 
-    def __init__(self, engine, db_class=None, filtered=False):
+    def __init__(self, engine, db_class=None, warning=True, filtered=False):
         if isinstance(engine, str):
             self._engine = create_async_engine(engine, future=True)
         else:
@@ -70,6 +70,12 @@ class Adapter(persist.Adapter):
 
         if db_class is None:
             db_class = CasbinRule
+            if warning:
+                warnings.warn(
+                    'Using default CasbinRule table, Please note the use of the "Adapter().create_table()" method to '
+                    'create the table structure, and ignore this warning if you are using a custom CasbinRule table.',
+                    RuntimeWarning,
+                )
         else:
             for attr in ("id", "ptype", "v0", "v1", "v2", "v3", "v4", "v5"):  # id attr was used by filter
                 if not hasattr(db_class, attr):
@@ -81,7 +87,6 @@ class Adapter(persist.Adapter):
             self._engine, expire_on_commit=False, class_=AsyncSession
         )
 
-        Base.metadata.create_all(self._engine)
         self._filtered = filtered
 
     @asynccontextmanager
@@ -94,6 +99,11 @@ class Adapter(persist.Adapter):
             except Exception as e:
                 await session.rollback()
                 raise e
+
+    async def create_table(self):
+        """Creates default casbin rule table."""
+        async with self._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     async def load_policy(self, model):
         """loads all policy rules from the storage."""
