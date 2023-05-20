@@ -12,20 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
 import os
+import unittest
+from unittest import IsolatedAsyncioTestCase
+
+import casbin
+from sqlalchemy import create_engine, Column, Integer, String, select
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
 from casbin_async_sqlalchemy_adapter import Adapter
 from casbin_async_sqlalchemy_adapter import Base
 from casbin_async_sqlalchemy_adapter import CasbinRule
-from casbin_async_sqlalchemy_adapter.adapter import Filter
-from unittest import IsolatedAsyncioTestCase
-from unittest import TestCase
-from unittest import async_case
-import casbin
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 
 
 def get_fixture(path):
@@ -33,28 +31,27 @@ def get_fixture(path):
     return os.path.abspath(dir_path + path)
 
 
-def get_enforcer():
-    engine = create_engine("sqlite://")
-    # engine = create_engine('sqlite:///' + os.path.split(os.path.realpath(__file__))[0] + '/test.db', echo=True)
+async def get_enforcer():
+    engine = create_async_engine("sqlite+aiosqlite://", future=True)
+    # engine = create_async_engine('sqlite+aiosqlite:///' + os.path.split(os.path.realpath(__file__))[0] + '/test.db',
+    # echo=True)
     adapter = Adapter(engine)
+    await adapter.create_table()
 
-    session = sessionmaker(bind=engine)
-    Base.metadata.create_all(engine)
-    s = session()
-    s.query(CasbinRule).delete()
-    s.add(CasbinRule(ptype="p", v0="alice", v1="data1", v2="read"))
-    s.add(CasbinRule(ptype="p", v0="bob", v1="data2", v2="write"))
-    s.add(CasbinRule(ptype="p", v0="data2_admin", v1="data2", v2="read"))
-    s.add(CasbinRule(ptype="p", v0="data2_admin", v1="data2", v2="write"))
-    s.add(CasbinRule(ptype="g", v0="alice", v1="data2_admin"))
-    s.commit()
-    s.close()
+    async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    async with async_session() as s:
+        s.add(CasbinRule(ptype="p", v0="alice", v1="data1", v2="read"))
+        s.add(CasbinRule(ptype="p", v0="bob", v1="data2", v2="write"))
+        s.add(CasbinRule(ptype="p", v0="data2_admin", v1="data2", v2="read"))
+        s.add(CasbinRule(ptype="p", v0="data2_admin", v1="data2", v2="write"))
+        s.add(CasbinRule(ptype="g", v0="alice", v1="data2_admin"))
+        await s.commit()
 
     return casbin.Enforcer(get_fixture("rbac_model.conf"), adapter)
 
 
 class TestConfig(IsolatedAsyncioTestCase):
-    def test_custom_db_class(self):
+    async def test_custom_db_class(self):
         class CustomRule(Base):
             __tablename__ = "casbin_rule2"
 
@@ -68,18 +65,19 @@ class TestConfig(IsolatedAsyncioTestCase):
             v5 = Column(String(255))
             not_exist = Column(String(255))
 
-        engine = create_engine("sqlite://")
-        adapter = Adapter(engine, CustomRule)
+        engine = create_async_engine("sqlite+aiosqlite://", future=True)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-        session = sessionmaker(bind=engine)
-        Base.metadata.create_all(engine)
-        s = session()
-        s.add(CustomRule(not_exist="NotNone"))
-        s.commit()
-        self.assertEqual(s.query(CustomRule).all()[0].not_exist, "NotNone")
+        session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        async with session() as s:
+            s.add(CustomRule(not_exist="NotNone"))
+            await s.commit()
+            a = await s.execute(select(CustomRule))
+            self.assertEqual(a.scalars().all()[0].not_exist, "NotNone")
 
     async def test_enforcer_basic(self):
-        e = get_enforcer()
+        e = await get_enforcer()
         self.assertFalse(e.enforce("alice", "data4", "read"))
         model = e.get_model()
         model.clear_policy()
@@ -88,7 +86,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("alice", "data4", "read"))
 
     async def test_add_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
         self.assertFalse(e.enforce("eve", "data4", "read"))
@@ -102,7 +100,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("eve", "data4", "read"))
 
     async def test_add_policies(self):
-        e = get_enforcer()
+        e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
         self.assertFalse(e.enforce("eve", "data4", "read"))
@@ -114,7 +112,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("eve", "data4", "read"))
 
     async def test_save_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
         self.assertFalse(e.enforce("alice", "data4", "read"))
 
         model = e.get_model()
@@ -127,7 +125,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("alice", "data4", "read"))
 
     async def test_remove_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
         self.assertFalse(e.enforce("alice", "data4", "read"))
 
         model = e.get_model()
@@ -138,7 +136,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertFalse(e.enforce("alice", "data4", "read"))
 
     async def test_remove_policies(self):
-        e = get_enforcer()
+        e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
         self.assertFalse(e.enforce("eve", "data4", "read"))
@@ -154,7 +152,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertFalse(e.enforce("eve", "data4", "read"))
 
     async def test_remove_filtered_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
         self.assertFalse(e.enforce("eve", "data4", "read"))
@@ -203,7 +201,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         s.close()
 
     async def test_filtered_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
 
         model = e.get_model()
         model.clear_policy()
@@ -219,7 +217,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         print(model.get_filtered_policy("p", "p", 2, "read"))
 
     async def test_update_policy(self):
-        e = get_enforcer()
+        e = await get_enforcer()
         model = e.get_model()
         model.clear_policy()
         model.add_policy("p", "p", ["alice", "data1", "read"])
@@ -238,7 +236,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertTrue(e.enforce("bob", "data3", "read"))
 
     async def test_update_policies(self):
-        e = get_enforcer()
+        e = await get_enforcer()
         model = e.get_model()
         model.clear_policy()
 
@@ -271,3 +269,7 @@ class TestConfig(IsolatedAsyncioTestCase):
 
         self.assertFalse(e.enforce("data2_admin", "data2", "write"))
         self.assertTrue(e.enforce("data2_admin", "data_test", "write"))
+
+
+if __name__ == '__main__':
+    unittest.main()
