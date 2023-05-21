@@ -15,11 +15,11 @@ Based on [Officially Supported Databases](http://www.sqlalchemy.org/), The curre
 
 - PostgreSQL
 - MySQL
+- MariaDB
 - SQLite
 - Oracle
 - Microsoft SQL Server
 - Firebird
-- Sybase
 
 ## Installation
 

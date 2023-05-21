@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from setuptools import setup, find_packages, __version__
 from os import path
+
+from setuptools import setup, find_packages
 
 desc_file = "README.md"
 
@@ -47,14 +48,14 @@ setup(
     ],
     packages=find_packages(),
     install_requires=install_requires,
-    python_requires=">=3.3",
+    python_requires=">=3.7",
     license="Apache 2.0",
     classifiers=[
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],

@@ -1,2 +1,2 @@
-SQLAlchemy>=1.2.18
+SQLAlchemy>=1.4.0
 asynccasbin
