@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.1.0](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.0.1...v1.1.0) (2023-05-21)
+
+
+### Features
+
+* fix automatic table creation error ([#5](https://github.com/pycasbin/async-sqlalchemy-adapter/issues/5)) ([a785acc](https://github.com/pycasbin/async-sqlalchemy-adapter/commit/a785acc1c987a3a16317ed1f8376600ef3ceb179))
+
 ## [1.0.1](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.0.0...v1.0.1) (2023-05-18)
 
 
