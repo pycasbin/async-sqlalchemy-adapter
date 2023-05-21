@@ -62,7 +62,7 @@ class Filter:
 class Adapter(persist.Adapter):
     """the interface for Casbin adapters."""
 
-    def __init__(self, engine, db_class=None, warning=True, filtered=False):
+    def __init__(self, engine, db_class=None, filtered=False, warning=True):
         if isinstance(engine, str):
             self._engine = create_async_engine(engine, future=True)
         else:
@@ -72,8 +72,8 @@ class Adapter(persist.Adapter):
             db_class = CasbinRule
             if warning:
                 warnings.warn(
-                    'Using default CasbinRule table, Please note the use of the "Adapter().create_table()" method to '
-                    'create the table structure, and ignore this warning if you are using a custom CasbinRule table.',
+                    'Using default CasbinRule table, please note the use of the "Adapter().create_table()" method to '
+                    'create the table, and ignore this warning if you are using a custom CasbinRule table.',
                     RuntimeWarning,
                 )
         else:
