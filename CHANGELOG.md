@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+## [1.1.1](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.1.0...v1.1.1) (2023-07-13)
+
+
+### Bug Fixes
+
+* Use sqlalchemy.orm.declarative_base ([#7](https://github.com/pycasbin/async-sqlalchemy-adapter/issues/7)) ([a323738](https://github.com/pycasbin/async-sqlalchemy-adapter/commit/a3237386df6f332cf7494f6c8bf52a1e350ce391))
+
 # [1.1.0](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.0.1...v1.1.0) (2023-05-21)
 
 
