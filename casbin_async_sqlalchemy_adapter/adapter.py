@@ -13,6 +13,7 @@
 # limitations under the License.
 import warnings
 from contextlib import asynccontextmanager
+from typing import List
 
 from casbin import persist
 from sqlalchemy import Column, Integer, String
@@ -206,7 +207,7 @@ class Adapter(persist.Adapter):
 
         return True if r > 0 else False
 
-    async def update_policy(self, sec: str, ptype: str, old_rule: [str], new_rule: [str]) -> None:
+    async def update_policy(self, sec: str, ptype: str, old_rule: List[str], new_rule: List[str]) -> None:
         """
         Update the old_rule with the new_rule in the database (storage).
 
@@ -237,7 +238,7 @@ class Adapter(persist.Adapter):
                 else:
                     setattr(old_rule_line, "v{}".format(index), None)
 
-    async def update_policies(self, sec: str, ptype: str, old_rules: [[str], ], new_rules: [[str], ]) -> None:
+    async def update_policies(self, sec: str, ptype: str, old_rules: List[List[str]], new_rules: List[List[str]]) -> None:
         """
         Update the old_rules with the new_rules in the database (storage).
 
@@ -251,7 +252,7 @@ class Adapter(persist.Adapter):
         for i in range(len(old_rules)):
             await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
 
-    async def update_filtered_policies(self, sec, ptype, new_rules: [[str]], field_index, *field_values) -> [[str]]:
+    async def update_filtered_policies(self, sec, ptype, new_rules: List[List[str]], field_index, *field_values) -> List[List[str]]:
         """update_filtered_policies updates all the policies on the basis of the filter."""
 
         filter = Filter()
@@ -266,7 +267,7 @@ class Adapter(persist.Adapter):
 
         return await self._update_filtered_policies(new_rules, filter)
 
-    async def _update_filtered_policies(self, new_rules, filter) -> [[str]]:
+    async def _update_filtered_policies(self, new_rules, filter) -> List[List[str]]:
         """_update_filtered_policies updates all the policies on the basis of the filter."""
 
         async with self._session_scope() as session:
