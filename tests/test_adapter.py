@@ -17,7 +17,7 @@ import unittest
 from unittest import IsolatedAsyncioTestCase
 
 import casbin
-from sqlalchemy import create_engine, Column, Integer, String, select
+from sqlalchemy import Column, Integer, String, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -371,6 +371,7 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertFalse(e.enforce("data2_admin", "data2", "write"))
         self.assertTrue(e.enforce("data2_admin", "data_test", "write"))
     
+    @unittest.skip('update_filtered_policies not supported by asynccasbin')
     async def test_update_filtered_policies(self):
         e = await get_enforcer()
 
