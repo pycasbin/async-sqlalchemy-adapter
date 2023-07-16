@@ -17,13 +17,14 @@ import unittest
 from unittest import IsolatedAsyncioTestCase
 
 import casbin
-from sqlalchemy import create_engine, Column, Integer, String, select
+from sqlalchemy import Column, Integer, String, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from casbin_async_sqlalchemy_adapter import Adapter
 from casbin_async_sqlalchemy_adapter import Base
 from casbin_async_sqlalchemy_adapter import CasbinRule
+from casbin_async_sqlalchemy_adapter.adapter import Filter
 
 
 def get_fixture(path):
@@ -47,7 +48,9 @@ async def get_enforcer():
         s.add(CasbinRule(ptype="g", v0="alice", v1="data2_admin"))
         await s.commit()
 
-    return casbin.Enforcer(get_fixture("rbac_model.conf"), adapter)
+    e = casbin.Enforcer(get_fixture("rbac_model.conf"), adapter)
+    await e.load_policy()
+    return e
 
 
 class TestConfig(IsolatedAsyncioTestCase):
@@ -78,24 +81,21 @@ class TestConfig(IsolatedAsyncioTestCase):
 
     async def test_enforcer_basic(self):
         e = await get_enforcer()
-        self.assertFalse(e.enforce("alice", "data4", "read"))
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policy("p", "p", ["alice", "data4", "read"])
-
-        self.assertTrue(e.enforce("alice", "data4", "read"))
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
 
     async def test_add_policy(self):
         e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
-
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policy("p", "p", ["eve", "data3", "read"])
-        model.add_policy("p", "p", ["eve", "data4", "read"])
-
+        res = await e.add_policies((("eve", "data3", "read"), ("eve", "data4", "read")))
+        self.assertTrue(res)
         self.assertTrue(e.enforce("eve", "data3", "read"))
         self.assertTrue(e.enforce("eve", "data4", "read"))
 
@@ -103,13 +103,9 @@ class TestConfig(IsolatedAsyncioTestCase):
         e = await get_enforcer()
 
         self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policies("p", "p", [("eve", "data3", "read"), ("eve", "data4", "read")])
-
+        res = await e.add_permission_for_user("eve", "data3", "read")
+        self.assertTrue(res)
         self.assertTrue(e.enforce("eve", "data3", "read"))
-        self.assertTrue(e.enforce("eve", "data4", "read"))
 
     async def test_save_policy(self):
         e = await get_enforcer()
@@ -121,58 +117,51 @@ class TestConfig(IsolatedAsyncioTestCase):
         model.add_policy("p", "p", ["alice", "data4", "read"])
 
         adapter = e.get_adapter()
-        adapter.save_policy(model)
+        await adapter.save_policy(model)
         self.assertTrue(e.enforce("alice", "data4", "read"))
 
     async def test_remove_policy(self):
         e = await get_enforcer()
-        self.assertFalse(e.enforce("alice", "data4", "read"))
-
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policy("p", "p", ["alice", "data4", "read"])
-        self.assertTrue(e.enforce("alice", "data4", "read"))
-        model.remove_policy("p", "p", ["alice", "data4", "read"])
-        self.assertFalse(e.enforce("alice", "data4", "read"))
+        
+        self.assertFalse(e.enforce("alice", "data5", "read"))
+        await e.add_permission_for_user("alice", "data5", "read")
+        self.assertTrue(e.enforce("alice", "data5", "read"))
+        await e.delete_permission_for_user("alice", "data5", "read")
+        self.assertFalse(e.enforce("alice", "data5", "read"))
 
     async def test_remove_policies(self):
         e = await get_enforcer()
 
-        self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policies("p", "p", [("eve", "data3", "read"), ("eve", "data4", "read")])
-
-        self.assertTrue(e.enforce("eve", "data3", "read"))
-        self.assertTrue(e.enforce("eve", "data4", "read"))
-        model.remove_policies("p", "p", [("eve", "data3", "read"), ("eve", "data4", "read")])
-
-        self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
+        self.assertFalse(e.enforce("alice", "data5", "read"))
+        self.assertFalse(e.enforce("alice", "data6", "read"))
+        await e.add_policies((("alice", "data5", "read"), ("alice", "data6", "read")))
+        self.assertTrue(e.enforce("alice", "data5", "read"))
+        self.assertTrue(e.enforce("alice", "data6", "read"))
+        await e.remove_policies((("alice", "data5", "read"), ("alice", "data6", "read")))
+        self.assertFalse(e.enforce("alice", "data5", "read"))
+        self.assertFalse(e.enforce("alice", "data6", "read"))
 
     async def test_remove_filtered_policy(self):
         e = await get_enforcer()
 
-        self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
-        self.assertFalse(e.enforce("alice", "data1", "read"))
-
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policies("p", "p", [("eve", "data3", "read"), ("eve", "data4", "read"), ("alice", "data1", "read")])
-
-        self.assertTrue(e.enforce("eve", "data3", "read"))
-        self.assertTrue(e.enforce("eve", "data4", "read"))
         self.assertTrue(e.enforce("alice", "data1", "read"))
-
-        model.remove_filtered_policy("p", "p", 1, "data1")
+        await e.remove_filtered_policy(1, "data1")
         self.assertFalse(e.enforce("alice", "data1", "read"))
 
-        model.remove_filtered_policy("p", "p", 2, "read")
-        self.assertFalse(e.enforce("eve", "data3", "read"))
-        self.assertFalse(e.enforce("eve", "data4", "read"))
-        self.assertFalse(e.enforce("alice", "data1", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
+
+        await e.remove_filtered_policy(1, "data2", "read")
+
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertTrue(e.enforce("alice", "data2", "write"))
+
+        await e.remove_filtered_policy(2, "write")
+
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
 
     async def test_str(self):
         rule = CasbinRule(ptype="p", v0="alice", v1="data1", v2="read")
@@ -189,56 +178,171 @@ class TestConfig(IsolatedAsyncioTestCase):
     async def test_repr(self):
         rule = CasbinRule(ptype="p", v0="alice", v1="data1", v2="read")
         self.assertEqual(repr(rule), '<CasbinRule None: "p, alice, data1, read">')
-        engine = create_engine("sqlite://")
+        engine = create_async_engine("sqlite+aiosqlite://", future=True)
 
-        session = sessionmaker(bind=engine)
-        Base.metadata.create_all(engine)
+        session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         s = session()
 
         s.add(rule)
-        s.commit()
+        await s.commit()
         self.assertRegex(repr(rule), r'<CasbinRule \d+: "p, alice, data1, read">')
-        s.close()
+        await s.close()
 
     async def test_filtered_policy(self):
         e = await get_enforcer()
+        filter = Filter()
 
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policy("p", "p", ["alice", "data1", "read"])
-        model.add_policy("p", "p", ["alice", "data3", "read"])
-        model.add_policy("p", "p", ["alice", "data2", "write"])
-        model.add_policy("p", "p", ["bob", "data2", "read"])
-        model.add_policy("p", "p", ["bob", "data1", "write"])
-        model.add_policy("p", "p", ["bob", "data3", "read"])
+        filter.ptype = ["p"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
 
-        print(model.get_filtered_policy("p", "p", 0, "alice"))
-        print(model.get_filtered_policy("p", "p", 1, "data1"))
-        print(model.get_filtered_policy("p", "p", 2, "read"))
+        filter.ptype = []
+        filter.v0 = ["alice"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v0 = ["bob"]
+        await e.load_filtered_policy(filter)
+        self.assertFalse(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v0 = ["data2_admin"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("data2_admin", "data2", "read"))
+        self.assertTrue(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+
+        filter.v0 = ["alice", "bob"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v0 = []
+        filter.v1 = ["data1"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v1 = ["data2"]
+        await e.load_filtered_policy(filter)
+        self.assertFalse(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("data2_admin", "data2", "read"))
+        self.assertTrue(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v1 = []
+        filter.v2 = ["read"]
+        await e.load_filtered_policy(filter)
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+        self.assertTrue(e.enforce("data2_admin", "data2", "read"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "write"))
+
+        filter.v2 = ["write"]
+        await e.load_filtered_policy(filter)
+        self.assertFalse(e.enforce("alice", "data1", "read"))
+        self.assertFalse(e.enforce("alice", "data1", "write"))
+        self.assertFalse(e.enforce("alice", "data2", "read"))
+        self.assertFalse(e.enforce("alice", "data2", "write"))
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        self.assertFalse(e.enforce("bob", "data2", "read"))
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        self.assertFalse(e.enforce("data2_admin", "data2", "read"))
+        self.assertTrue(e.enforce("data2_admin", "data2", "write"))
 
     async def test_update_policy(self):
         e = await get_enforcer()
-        model = e.get_model()
-        model.clear_policy()
-        model.add_policy("p", "p", ["alice", "data1", "read"])
-        model.add_policy("p", "p", ["alice", "data3", "read"])
-        model.add_policy("p", "p", ["alice", "data2", "write"])
+        example_p = ["mike", "cookie", "eat"]
 
-        model.update_policy("p", "p", ["alice", "data1", "read"], ["bob", "data2", "read"])
-        model.update_policy("p", "p", ["alice", "data3", "read"], ["bob", "data1", "write"])
-        model.update_policy("p", "p", ["alice", "data2", "write"], ["bob", "data3", "read"])
-
+        self.assertTrue(e.enforce("alice", "data1", "read"))
+        await e.update_policy(["alice", "data1", "read"], ["alice", "data1", "no_read"])
         self.assertFalse(e.enforce("alice", "data1", "read"))
-        self.assertFalse(e.enforce("alice", "data3", "read"))
-        self.assertFalse(e.enforce("alice", "data2", "write"))
-        self.assertTrue(e.enforce("bob", "data2", "read"))
+
+        self.assertFalse(e.enforce("bob", "data1", "read"))
+        await e.add_policy(example_p)
+        await e.update_policy(example_p, ["bob", "data1", "read"])
+        self.assertTrue(e.enforce("bob", "data1", "read"))
+
+        self.assertFalse(e.enforce("bob", "data1", "write"))
+        await e.update_policy(["bob", "data1", "read"], ["bob", "data1", "write"])
         self.assertTrue(e.enforce("bob", "data1", "write"))
-        self.assertTrue(e.enforce("bob", "data3", "read"))
+
+        self.assertTrue(e.enforce("bob", "data2", "write"))
+        await e.update_policy(["bob", "data2", "write"], ["bob", "data2", "read"])
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+
+        self.assertTrue(e.enforce("bob", "data2", "read"))
+        await e.update_policy(["bob", "data2", "read"], ["carl", "data2", "write"])
+        self.assertFalse(e.enforce("bob", "data2", "write"))
+
+        self.assertTrue(e.enforce("carl", "data2", "write"))
+        await e.update_policy(["carl", "data2", "write"], ["carl", "data2", "no_write"])
+        self.assertFalse(e.enforce("bob", "data2", "write"))
 
     async def test_update_policies(self):
         e = await get_enforcer()
-        model = e.get_model()
-        model.clear_policy()
 
         old_rule_0 = ["alice", "data1", "read"]
         old_rule_1 = ["bob", "data2", "write"]
@@ -253,9 +357,6 @@ class TestConfig(IsolatedAsyncioTestCase):
         old_rules = [old_rule_0, old_rule_1, old_rule_2, old_rule_3]
         new_rules = [new_rule_0, new_rule_1, new_rule_2, new_rule_3]
 
-        model.add_policies("p", "p", old_rules)
-        model.update_policies("p", "p", old_rules, new_rules)
-
         await e.update_policies(old_rules, new_rules)
 
         self.assertFalse(e.enforce("alice", "data1", "read"))
@@ -269,6 +370,27 @@ class TestConfig(IsolatedAsyncioTestCase):
 
         self.assertFalse(e.enforce("data2_admin", "data2", "write"))
         self.assertTrue(e.enforce("data2_admin", "data_test", "write"))
+    
+    @unittest.skip('update_filtered_policies not supported by asynccasbin')
+    async def test_update_filtered_policies(self):
+        e = await get_enforcer()
+
+        await e.update_filtered_policies(
+            [
+                ["data2_admin", "data3", "read"],
+                ["data2_admin", "data3", "write"],
+            ],
+            0,
+            "data2_admin",
+        )
+        self.assertTrue(e.enforce("data2_admin", "data3", "write"))
+        self.assertTrue(e.enforce("data2_admin", "data3", "read"))
+
+        await e.update_filtered_policies([["alice", "data1", "write"]], 0, "alice")
+        self.assertTrue(e.enforce("alice", "data1", "write"))
+
+        await e.update_filtered_policies([["bob", "data2", "read"]], 0, "bob")
+        self.assertTrue(e.enforce("bob", "data2", "read"))
 
 
 if __name__ == '__main__':
