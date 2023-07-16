@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.2.0](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.1.1...v1.2.0) (2023-07-16)
+
+
+### Features
+
+* Update adapter to support sqlalchemy 2.0 syntax ([#9](https://github.com/pycasbin/async-sqlalchemy-adapter/issues/9)) ([63aafc3](https://github.com/pycasbin/async-sqlalchemy-adapter/commit/63aafc3775784c4fa5324b4a2c87468a2eb5b39d))
+
 ## [1.1.1](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.1.0...v1.1.1) (2023-07-13)
 
 
