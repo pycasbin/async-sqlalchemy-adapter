@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import List
 
 from casbin import persist
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, delete
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.future import select
@@ -118,21 +118,20 @@ class Adapter(persist.Adapter):
     async def load_filtered_policy(self, model, filter) -> None:
         """loads all policy rules from the storage."""
         async with self._session_scope() as session:
-            query = select(self._db_class)
-            filters = self.filter_query(query, filter)
-            filters = await session.execute(filters)
-
-            for line in filters.scalars():
+            stmt = select(self._db_class)
+            stmt = self.filter_query(stmt, filter)
+            result = await session.execute(stmt)
+            for line in result.scalars():
                 persist.load_policy_line(str(line), model)
             self._filtered = True
-
-    def filter_query(self, querydb, filter):
+    
+    def filter_query(self, stmt, filter):
         for attr in ("ptype", "v0", "v1", "v2", "v3", "v4", "v5"):
             if len(getattr(filter, attr)) > 0:
-                querydb = querydb.filter(
+                stmt = stmt.where(
                     getattr(self._db_class, attr).in_(getattr(filter, attr))
                 )
-        return querydb.order_by(self._db_class.id)
+        return stmt.order_by(self._db_class.id)
 
     async def _save_policy_line(self, ptype, rule):
         async with self._session_scope() as session:
@@ -144,8 +143,8 @@ class Adapter(persist.Adapter):
     async def save_policy(self, model):
         """saves all policy rules to the storage."""
         async with self._session_scope() as session:
-            query = select(self._db_class)
-            await session.execute(query.delete())
+            stmt = delete(self._db_class)
+            await session.execute(stmt)
             for sec in ["p", "g"]:
                 if sec not in model.model.keys():
                     continue
@@ -166,34 +165,32 @@ class Adapter(persist.Adapter):
     async def remove_policy(self, sec, ptype, rule):
         """removes a policy rule from the storage."""
         async with self._session_scope() as session:
-            query = session.query(self._db_class)
-            query = query.filter(self._db_class.ptype == ptype)
+            stmt = delete(self._db_class).where(self._db_class.ptype == ptype)
             for i, v in enumerate(rule):
-                query = query.filter(getattr(self._db_class, "v{}".format(i)) == v)
-            r = await query.delete()
+                stmt = stmt.where(getattr(self._db_class, "v{}".format(i)) == v)
+            r = await session.execute(stmt)
 
-        return True if r > 0 else False
+        return True if r.rowcount > 0 else False
 
     async def remove_policies(self, sec, ptype, rules):
         """remove policy rules from the storage."""
         if not rules:
             return
         async with self._session_scope() as session:
-            query = session.query(self._db_class)
-            query = query.filter(self._db_class.ptype == ptype)
+            stmt = delete(self._db_class).where(self._db_class.ptype == ptype)
             rules = zip(*rules)
             for i, rule in enumerate(rules):
-                query = query.filter(
+                stmt = stmt.where(
                     or_(getattr(self._db_class, "v{}".format(i)) == v for v in rule)
                 )
-            await query.delete()
+            await session.execute(stmt)
 
     async def remove_filtered_policy(self, sec, ptype, field_index, *field_values):
         """removes policy rules that match the filter from the storage.
         This is part of the Auto-Save feature.
         """
         async with self._session_scope() as session:
-            query = session.query(self._db_class).filter(self._db_class.ptype == ptype)
+            stmt = delete(self._db_class).where(self._db_class.ptype == ptype)
 
             if not (0 <= field_index <= 5):
                 return False
@@ -202,10 +199,10 @@ class Adapter(persist.Adapter):
             for i, v in enumerate(field_values):
                 if v != "":
                     v_value = getattr(self._db_class, "v{}".format(field_index + i))
-                    query = query.filter(v_value == v)
-            r = await query.delete()
+                    stmt = stmt.where(v_value == v)
+            r = await session.execute(stmt)
 
-        return True if r > 0 else False
+        return True if r.rowcount > 0 else False
 
     async def update_policy(self, sec: str, ptype: str, old_rule: List[str], new_rule: List[str]) -> None:
         """
@@ -220,16 +217,17 @@ class Adapter(persist.Adapter):
         """
 
         async with self._session_scope() as session:
-            query = session.query(self._db_class).filter(self._db_class.ptype == ptype)
+            stmt = select(self._db_class).where(self._db_class.ptype == ptype)
 
             # locate the old rule
             for index, value in enumerate(old_rule):
                 v_value = getattr(self._db_class, "v{}".format(index))
-                query = query.filter(v_value == value)
+                stmt = stmt.where(v_value == value)
 
             # need the length of the longest_rule to perform overwrite
             longest_rule = old_rule if len(old_rule) > len(new_rule) else new_rule
-            old_rule_line = await query.one()
+            result = await session.execute(stmt)
+            old_rule_line = result.scalar_one()
 
             # overwrite the old rule with the new rule
             for index in range(len(longest_rule)):
@@ -273,11 +271,12 @@ class Adapter(persist.Adapter):
         async with self._session_scope() as session:
             # Load old policies
 
-            query = session.query(self._db_class).filter(
+            stmt = select(self._db_class).where(
                 self._db_class.ptype == filter.ptype
             )
-            filtered_query = self.filter_query(query, filter)
-            old_rules = await filtered_query.all()
+            filtered_stmt = self.filter_query(stmt, filter)
+            result = await session.execute(filtered_stmt)
+            old_rules = result.scalars().all()
 
             # Delete old policies
 
