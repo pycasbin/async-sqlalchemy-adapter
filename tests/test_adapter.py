@@ -48,7 +48,7 @@ async def get_enforcer():
         s.add(CasbinRule(ptype="g", v0="alice", v1="data2_admin"))
         await s.commit()
 
-    e = casbin.Enforcer(get_fixture("rbac_model.conf"), adapter)
+    e = casbin.AsyncEnforcer(get_fixture("rbac_model.conf"), adapter)
     await e.load_policy()
     return e
 
@@ -371,7 +371,6 @@ class TestConfig(IsolatedAsyncioTestCase):
         self.assertFalse(e.enforce("data2_admin", "data2", "write"))
         self.assertTrue(e.enforce("data2_admin", "data_test", "write"))
     
-    @unittest.skip('update_filtered_policies not supported by asynccasbin')
     async def test_update_filtered_policies(self):
         e = await get_enforcer()
 
