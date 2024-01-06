@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from typing import List
 
 from casbin import persist
+from casbin.persist.adapters.asyncio import AsyncAdapter
 from sqlalchemy import Column, Integer, String, delete
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -59,7 +60,7 @@ class Filter:
     v5 = []
 
 
-class Adapter(persist.Adapter):
+class Adapter(AsyncAdapter):
     """the interface for Casbin adapters."""
 
     def __init__(self, engine, db_class=None, filtered=False, warning=True):
@@ -72,12 +73,21 @@ class Adapter(persist.Adapter):
             db_class = CasbinRule
             if warning:
                 warnings.warn(
-                    'Using default CasbinRule table, please note the use of the "Adapter().create_table()" method to '
-                    'create the table, and ignore this warning if you are using a custom CasbinRule table.',
+                    "Using default CasbinRule table, please note the use of the 'Adapter().create_table()' method"
+                    " to create the table, and ignore this warning if you are using a custom CasbinRule table.",
                     RuntimeWarning,
                 )
         else:
-            for attr in ("id", "ptype", "v0", "v1", "v2", "v3", "v4", "v5"):  # id attr was used by filter
+            for attr in (
+                "id",
+                "ptype",
+                "v0",
+                "v1",
+                "v2",
+                "v3",
+                "v4",
+                "v5",
+            ):  # id attr was used by filter
                 if not hasattr(db_class, attr):
                     raise Exception(f"{attr} not found in custom DatabaseClass.")
             Base.metadata = db_class.metadata
@@ -124,7 +134,7 @@ class Adapter(persist.Adapter):
             for line in result.scalars():
                 persist.load_policy_line(str(line), model)
             self._filtered = True
-    
+
     def filter_query(self, stmt, filter):
         for attr in ("ptype", "v0", "v1", "v2", "v3", "v4", "v5"):
             if len(getattr(filter, attr)) > 0:
@@ -204,7 +214,9 @@ class Adapter(persist.Adapter):
 
         return True if r.rowcount > 0 else False
 
-    async def update_policy(self, sec: str, ptype: str, old_rule: List[str], new_rule: List[str]) -> None:
+    async def update_policy(
+        self, sec: str, ptype: str, old_rule: List[str], new_rule: List[str]
+    ) -> None:
         """
         Update the old_rule with the new_rule in the database (storage).
 
@@ -236,7 +248,13 @@ class Adapter(persist.Adapter):
                 else:
                     setattr(old_rule_line, "v{}".format(index), None)
 
-    async def update_policies(self, sec: str, ptype: str, old_rules: List[List[str]], new_rules: List[List[str]]) -> None:
+    async def update_policies(
+        self,
+        sec: str,
+        ptype: str,
+        old_rules: List[List[str]],
+        new_rules: List[List[str]],
+    ) -> None:
         """
         Update the old_rules with the new_rules in the database (storage).
 
@@ -250,7 +268,9 @@ class Adapter(persist.Adapter):
         for i in range(len(old_rules)):
             await self.update_policy(sec, ptype, old_rules[i], new_rules[i])
 
-    async def update_filtered_policies(self, sec, ptype, new_rules: List[List[str]], field_index, *field_values) -> List[List[str]]:
+    async def update_filtered_policies(
+        self, sec, ptype, new_rules: List[List[str]], field_index, *field_values
+    ) -> List[List[str]]:
         """update_filtered_policies updates all the policies on the basis of the filter."""
 
         filter = Filter()
@@ -271,9 +291,7 @@ class Adapter(persist.Adapter):
         async with self._session_scope() as session:
             # Load old policies
 
-            stmt = select(self._db_class).where(
-                self._db_class.ptype == filter.ptype
-            )
+            stmt = select(self._db_class).where(self._db_class.ptype == filter.ptype)
             filtered_stmt = self.filter_query(stmt, filter)
             result = await session.execute(filtered_stmt)
             old_rules = result.scalars().all()
