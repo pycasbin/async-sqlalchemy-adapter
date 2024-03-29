@@ -1,5 +1,12 @@
 # Semantic Versioning Changelog
 
+# [1.5.0](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.4.0...v1.5.0) (2024-03-29)
+
+
+### Features
+
+* upgrade CI Node.js version to 20 ([086c74c](https://github.com/pycasbin/async-sqlalchemy-adapter/commit/086c74cc8869f292533c1e082fe5b138e140fffe))
+
 # [1.4.0](https://github.com/pycasbin/async-sqlalchemy-adapter/compare/v1.3.0...v1.4.0) (2024-01-06)
 
 
