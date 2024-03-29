@@ -1,6 +1,6 @@
 async-sqlalchemy-adapter
 ====
-Async SQLAlchemy Adapter for PyCasbin<br>
+
 [![GitHub Actions](https://github.com/pycasbin/async-sqlalchemy-adapter/workflows/build/badge.svg?branch=master)](https://github.com/pycasbin/async-sqlalchemy-adapter/actions)
 [![Coverage Status](https://coveralls.io/repos/github/pycasbin/async-sqlalchemy-adapter/badge.svg)](https://coveralls.io/github/pycasbin/async-sqlalchemy-adapter)
 [![Version](https://img.shields.io/pypi/v/casbin_async_sqlalchemy_adapter.svg)](https://pypi.org/project/casbin_async_sqlalchemy_adapter/)
